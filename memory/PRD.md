@@ -1,37 +1,30 @@
-# PRD — Keuangan-1 (Aplikasi Keuangan & HPP UMKM)
+# PRD — Keuangan-V1 (Aplikasi Keuangan & HPP UMKM)
 
-## Problem statement (asli)
-Import repo GitHub `danarhuda59-commits/Keuangan-1` (app Emergent-generated: FastAPI + MongoDB + React CRA/CRACO), install dependensi reproducible dengan lockfile, siapkan env lokal & production, verifikasi e2e lokal, audit tanpa refactor, kesiapan deploy (frontend Vercel, backend Railway/Render/Fly via Dockerfile, MongoDB Atlas).
+## Problem statement (asli, ringkas)
+Import repo `danarhuda59-commits/Keuangan-V1` (branch `main`) ke workspace baru, install dependency sesuai lockfile, `.env.example`, audit credential, admin baru dari env, Dockerfile backend, smoke test, `README-setup.md`, laporan audit fitur (Fase 5). **Bukan** membangun fitur baru. Setelah audit: fitur "Keuangan Penjualan Marketplace & Website + Biaya Beban Packaging" sebagai plan terpisah (spesifikasi lengkap A–O ada di pesan user).
 
 ## Pilihan user
-- Backend hosting: Railway/Render/Fly + Dockerfile (bukan Vercel)
-- Data awal: DB kosong + seed 1 admin baru (`admin@keuangan.id` / `admin12345`)
-- Package manager: yarn (commit `yarn.lock`)
-
-## Persona
-Pemilik/operator UMKM F&B: hitung HPP dari bahan & resep, catat pembelian/produksi/penjualan, lihat laporan.
+- Repo public (tanpa token); runtime fallback = Node 20 / Python 3.11 workspace; MongoDB lokal workspace; admin baru password acak di env; lanjut ke fitur marketplace setelah audit (tunggu konfirmasi).
 
 ## Arsitektur
-- `backend/` FastAPI 0.110 (Python 3.11), Motor, JWT (PyJWT) + bcrypt, semua route prefix `/api`
-- `frontend/` React 19 CRA + CRACO 7, Tailwind, shadcn/ui, SWR/axios
-- MongoDB (lokal dev → Atlas prod)
+- `backend/` FastAPI 0.110 (Python 3.11), Motor, PyJWT + bcrypt, semua route prefix `/api`; `core.py` (HPP engine, ledger) + 5 router
+- `frontend/` React 19 CRA + CRACO 7, Tailwind, shadcn/ui, SWR/axios; `src/lib/api.js` → `REACT_APP_BACKEND_URL`
+- MongoDB (lokal dev → Atlas prod); S3-compatible storage opsional
 
-## Yang sudah dikerjakan (Juni 2026)
-- [x] Iterasi 3 — Simulasi Harga: tabel margin 20/30/40/50% (+ target bila berbeda) di ringkasan HPP (editor resep & Perhitungan HPP), tiap baris bisa "pakai" → isi harga jual; `price_simulation` di API `compute_hpp`; fix overflow mobile editor resep (`min-w-0`)
-- [x] Iterasi 2 — P0 deploy: CORS_ORIGINS wajib/eksplisit; upload foto → S3-compatible boto3 (`backend/storage.py`, 503 + UI notice bila S3_* kosong); telemetri Emergent dihapus dari index.html
-- [x] Iterasi 2 — Fix H6: `pct_material` sub-resep dihitung dari bahan sub-resep (HPP produksi == HPP resep, diverifikasi 2550 == 2550, overhead 500)
-- [x] Iterasi 2 — Target Margin Otomatis: default usaha + override per resep, `suggest_price()` di core.py, `suggestPrice()` di lib/hpp.js, UI di RecipeEditor/Recipes/HppCalculator; test: test_target_margin.py (4) + test_iteration4.py (11) lulus
-- [x] Fase 0: clone, scan credential (bersih), catatan revoke PAT
-- [x] Fase 1: `requirements.txt` minimal (18 paket, versi identik freeze asli), `requirements.lock`, `.env.example`, `Dockerfile`, `.python-version`, `runtime.txt`; backend jalan, admin ter-seed, 11 unit test HPP lulus
-- [x] Fase 2: `yarn.lock`, `.env.example`, `vercel.json`, `.nvmrc`; audit craco (plugin Emergent sudah ter-gate untuk prod); `CI=true yarn build` lolos 0 warning
-- [x] Fase 3: e2e via testing agent — login, bahan, produk, resep+HPP (math terverifikasi), pembelian→produksi→penjualan, laporan, isolasi multi-tenant: 8/8 backend + 7 route frontend lulus (`backend/tests/test_setup_e2e.py`)
-- [x] Fase 4: `AUDIT.md` (keamanan S1–S11, HPP H1–H8, struktur, prioritas P0–P2)
-- [x] Fase 5: checklist deploy di `AUDIT.md` + `README.md`
+## Persona
+Pemilik/operator UMKM F&B: HPP dari bahan & resep, pembelian/produksi/penjualan, laporan; menjual via Shopee/TikTok/Tokopedia/Website.
 
-## Backlog prioritas (dari AUDIT.md)
-- P0: isi S3_* + CORS_ORIGINS + JWT_SECRET di env production
-- P1: RBAC owner-only untuk restore/demo/users; hilangkan token di query string; rate limit via X-Forwarded-For + register
-- P2: Decimal/integer rupiah; lifespan API; `@emergentbase/*` → optionalDependencies; bersihkan test preview-only
+## Yang sudah dikerjakan (Juni 2026 — re-import)
+- [x] Fase 0–1: clone histori utuh (7 commit), branch default `main`, runtime terdeteksi (.nvmrc 20, .python-version 3.11), credential scan bersih
+- [x] Fase 2: `yarn install` (yarn.lock tidak ada di repo → dibuat), `pip install -r requirements.txt` + `requirements.lock` dari venv bersih, warning dicatat
+- [x] Fase 3: `.env.example` x2, JWT_SECRET + ADMIN_* di backend/.env, backend & frontend jalan, login OK, `GET /api/health`
+- [x] Fase 4: `scripts/create_admin.py`, Dockerfile multi-stage non-root (belum bisa di-build: tanpa Docker di workspace), `README-setup.md`, 16 unit test lulus, `CI=true yarn build` lolos
+- [x] Fase 5: gap analysis fitur marketplace/packaging di `AUDIT.md`
 
-## Tidak diubah (by design)
-Seluruh kode aplikasi (`backend/*.py`, `frontend/src/**`, `craco.config.js`, `index.html`).
+## Backlog prioritas
+- P0 (fitur berikutnya, menunggu go): Marketplace & Packaging — urutan saran: (1) pengaturan biaya channel, (2) packaging items/costs per SKU, (3) perluasan `sales` → order marketplace dengan status & inventory by-status, (4) import dengan mapping + dedup Order ID, (5) settlement + rekonsiliasi, (6) dashboard/laporan/export
+- P1 (dari AUDIT.md): RBAC owner-only untuk restore/demo/users; token di query string; rate limit register
+- P2: Decimal/integer rupiah; lifespan API; `@emergentbase/*` → optionalDependencies; commit `yarn.lock` & `requirements.lock`
+
+## Catatan operasional
+- Kredensial dev: `memory/test_credentials.md`. Docker build harus diverifikasi di mesin dengan Docker.

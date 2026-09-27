@@ -4,6 +4,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import os, logging
 from fastapi import FastAPI, APIRouter
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from core import db, client, hash_password, verify_password
 from routers import auth, master, recipes, operations, finance, settings_router
@@ -19,6 +20,16 @@ api = APIRouter(prefix="/api")
 @api.get("/")
 async def root():
     return {"message": "Business Finance & HPP Management System API"}
+
+
+@api.get("/health")
+async def health():
+    try:
+        await client.admin.command("ping")
+        return {"status": "ok", "database": "ok"}
+    except Exception as e:
+        logger.error("Health check DB failure: %s", e)
+        return JSONResponse({"status": "degraded", "database": "unreachable"}, status_code=503)
 
 
 for r in (auth.router, master.router, recipes.router, operations.router, finance.router, settings_router.router):

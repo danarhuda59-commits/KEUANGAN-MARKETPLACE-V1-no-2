@@ -142,6 +142,27 @@ Tanggal: Juni 2026 · Lingkup: import repo, setup reproducible, audit **tanpa re
 - Network Access: IP egress backend (Railway: aktifkan Static Outbound IP; Render: daftar IP di dashboard). Hindari `0.0.0.0/0`.
 - `MONGO_URL=mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority`.
 
+## Fase 5 (re-import Keuangan-V1, Juni 2026) — Fitur yang ADA vs yang DIMINTA (Marketplace & Packaging)
+
+Dasar plan pengembangan berikutnya. Kolom "Ada?" = kondisi kode HEAD `0af3f67`.
+
+| Area diminta | Ada? | Yang sudah ada di kode | Gap |
+|---|---|---|---|
+| A. Channel Shopee/TikTok Shop/Tokopedia/Website | **Sebagian** | `db.channels` per bisnis, default seed 7 channel termasuk 4 itu (`auth.py:13`); `sales.channel` wajib (default `"Offline"`); CRUD via `master.py` | Sudah cukup; hanya perlu dipakai sebagai referensi (bukan free-text) |
+| B. Data transaksi lengkap (Order ID, voucher, ongkir, subsidi ongkir, biaya iklan, refund, packaging, status pesanan, total dibayar/diterima) | **Sebagian kecil** | `sales`: `date, channel, customer, items[product,sku,qty,price,discount,hpp]`, `discount`, `platform_fee`, `service_fee`, `other_fee`, `net_total`, `total_hpp`, `profit`, `payment_method` | Tidak ada: `order_id`, harga normal, voucher, ongkir & subsidi, biaya admin/transaksi/iklan terpisah, refund/retur, biaya packaging, gross/net profit terpisah, margin, total dibayar customer vs diterima seller, **status pesanan** (sekarang semua penjualan dianggap selesai) |
+| C. Rumus profit berlapis (Omzet Kotor → Bersih → Gross → Net → Margin) | **Sebagian** | `profit = net_total − total_hpp`; `safe_div` ada di `core.py`; `num()` menolak NaN/Inf | Belum ada pemisahan gross/net profit, margin per order, komponen biaya terpisah |
+| D. Biaya Beban Packaging (modul + konfigurasi per produk) | **Tidak ada** sebagai modul | Hanya `extra_costs` tipe `packaging` di **resep** (masuk ke HPP batch) | Perlu koleksi `packaging_items` + `packaging_costs` per SKU; **risiko double counting**: jika resep sudah punya biaya `packaging`, transaksi tidak boleh menambah lagi → perlu aturan eksplisit |
+| E. Import CSV/Excel marketplace (preview → mapping → validasi → duplikasi → konfirmasi) | **Sebagian** | `settings_router.py`: `/import/preview` & `/import/commit` untuk `sales` dengan kolom tetap `tanggal,channel,produk,qty,harga,diskon,biaya_platform` (CSV+XLSX via pandas/openpyxl), error per baris | Tidak ada mapping kolom bebas, tidak ada deteksi duplikat Order ID, tidak ada format per-marketplace |
+| F. Rekonsiliasi marketplace | **Tidak ada** | — | Modul baru |
+| G. Settlement/Payout | **Tidak ada** | — | Modul baru; `cash_transactions` bisa dipakai untuk mencatat uang masuk saat payout |
+| H. Pengaturan biaya channel (persentase/nominal, periode berlaku) | **Tidak ada** | `platform_fee`/`service_fee` diinput manual per transaksi | Koleksi `sales_fees` + kalkulasi otomatis saat input/import |
+| I. Dashboard filter channel/produk/SKU/status + KPI lengkap | **Sebagian** | `/dashboard` (omzet, laba, kas, stok), `/dashboard/material-cost-trend`, filter periode; grafik omzet harian & per channel | Belum ada filter channel/produk/status, KPI packaging/iklan/AOV, grafik per komponen biaya |
+| J. Laporan (10 jenis) + export Excel/CSV/PDF | **Sebagian** | `reports/sales, hpp, products, channels, profit-loss, cash-flow, expenses, purchases, production`; frontend punya `xlsx` & `jspdf` di dependencies | Belum ada: laporan packaging, marketplace fee, advertising, settlement, rekonsiliasi |
+| K. Inventory: satu titik pengurangan stok, tidak untuk Pending/Batal/Refund | **Sebagian** | `post_inventory` satu titik; `apply_sale` langsung mengurangi stok saat dibuat; `reverse_ref` saat hapus/edit | Tidak ada konsep status → semua sale mengurangi stok saat dibuat. Perlu aturan "kurangi stok saat status ≥ Diproses/Dikirim" dan `reverse_ref` saat Batal/Refund |
+| L. Koleksi baru | — | `sales`, `channels`, `cash_transactions`, `inventory_transactions`, `expenses` (kategori "Iklan", "Marketplace") | Kandidat baru: `sales_orders`(perluasan `sales`), `sales_fees`, `packaging_items`, `packaging_costs`, `marketplace_imports`, `marketplace_settlements`, `sales_reconciliation`. **Rekomendasi**: perluas dokumen `sales` (tambah field) daripada koleksi paralel, agar laporan/dashboard/kas lama tetap konsisten |
+| M. Keamanan | **OK** | JWT + bcrypt, isolasi `business_id` via `Q()` | Tidak ada API marketplace — sesuai permintaan |
+| N. UI/UX | **Ada dasar** | shadcn/ui, `lib/format.js` (Rp, tanggal ID), tabel, filter tanggal, recharts | Halaman baru: Penjualan Marketplace, Packaging, Import, Settlement, Rekonsiliasi, Pengaturan Biaya |
+
 ## Perubahan yang dilakukan (ringkas)
 
 | File | Aksi |
