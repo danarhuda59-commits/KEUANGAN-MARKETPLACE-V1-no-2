@@ -102,17 +102,21 @@ Tanggal: Juni 2026 · Lingkup: import repo, setup reproducible, audit **tanpa re
 
 ## Prioritas Perbaikan (tahap berikutnya)
 
+**Sudah dikerjakan (iterasi 2)**
+- ✅ S1 CORS: `CORS_ORIGINS` kini **wajib** (tanpa default `*`), daftar origin eksplisit.
+- ✅ S9 Storage: upload foto memakai **S3-compatible (boto3)** via `backend/storage.py` — env `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT` (R2), `S3_REGION`. Tanpa env → `POST /upload` 503 dengan pesan jelas, `GET /meta.storage_enabled=false`, tombol upload di UI diganti pemberitahuan.
+- ✅ Script telemetri Emergent (`emergent-main.js`, PostHog) dihapus dari `public/index.html`; title diganti.
+- ✅ H6: `pct_material` pada sub-resep di `expand_items` kini dihitung dari biaya bahan sub-resep itu sendiri → HPP produksi == HPP resep.
+- ✅ Fitur baru: **Target Margin Otomatis** — default usaha (`businesses.target_margin`, 30%) + override per resep (`recipes.target_margin`). Rumus `harga = HPP ÷ (1 − margin)`, dibulatkan ke atas Rp100; tampil di editor resep, Perhitungan HPP, dan kolom "Harga Saran" di tabel resep.
+
 **P0 (sebelum go-live)**
-1. Set `CORS_ORIGINS` eksplisit ke domain Vercel (S1).
-2. Ganti storage upload logo dari Emergent Object Storage ke S3/R2/Cloudinary, atau nonaktifkan tombol upload (S9).
-3. Hapus script telemetri Emergent dari `public/index.html`.
-4. `JWT_SECRET` acak ≥ 32 byte di env production (bukan dari `.env.example`).
+1. Isi `S3_*` di env production (bucket R2/S3 privat, key `readWrite` bucket itu saja).
+2. `CORS_ORIGINS=https://<app>.vercel.app` dan `JWT_SECRET` acak ≥ 32 byte di env production.
 
 **P1**
 5. Batasi `POST /restore`, `DELETE /demo`, `POST /users` ke role `owner` (S6, S7).
 6. Hilangkan token di query string; ganti dengan signed URL berumur pendek untuk file (S2).
 7. Rate limit berbasis `X-Forwarded-For` + rate limit `/auth/register` (S4).
-8. Perbaiki `pct_material` sub-resep di `expand_items` (H6).
 
 **P2**
 9. Migrasi nominal ke integer rupiah / `Decimal` (H1).
@@ -129,7 +133,7 @@ Tanggal: Juni 2026 · Lingkup: import repo, setup reproducible, audit **tanpa re
 
 **Backend → Railway / Render / Fly** (`backend/Dockerfile` sudah dibuat)
 - Root Directory: `backend`. Image `python:3.11-slim`, install dari `requirements.lock`, `uvicorn server:app --host 0.0.0.0 --port $PORT`.
-- Env wajib: `MONGO_URL` (Atlas SRV), `DB_NAME`, `JWT_SECRET`, `CORS_ORIGINS=https://<app>.vercel.app`, opsional `ADMIN_EMAIL`/`ADMIN_PASSWORD` untuk seed pertama (hapus setelah login pertama).
+- Env wajib: `MONGO_URL` (Atlas SRV), `DB_NAME`, `JWT_SECRET`, `CORS_ORIGINS=https://<app>.vercel.app` (wajib, dipisah koma), `S3_BUCKET`/`S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`/`S3_ENDPOINT` (R2: `https://<account>.r2.cloudflarestorage.com`, region `auto`), opsional `ADMIN_EMAIL`/`ADMIN_PASSWORD` untuk seed pertama (hapus setelah login pertama).
 - Tambahkan `--proxy-headers --forwarded-allow-ips="*"` ke perintah uvicorn agar rate limit login membaca IP asli (S4).
 - Health check path: `/api/`.
 
