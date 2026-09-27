@@ -506,6 +506,7 @@ async def stock_alerts(user=Depends(current_user), cover_days: int = 14):
 @router.get("/meta")
 async def meta(user=Depends(current_user)):
     channels = await db.channels.find({"business_id": user["business_id"], "is_active": {"$ne": False}}, {"_id": 0}).to_list(100)
-    return {"expense_categories": EXPENSE_CATEGORIES, "payment_methods": PAYMENT_METHODS, "channels": [c["name"] for c in channels],
+    import storage
+    return {"expense_categories": EXPENSE_CATEGORIES, "payment_methods": PAYMENT_METHODS, "channels": [c["name"] for c in channels], "storage_enabled": storage.storage_enabled(),
             "extra_cost_types": [{"value": "packaging", "label": "Kemasan"}, {"value": "labor", "label": "Tenaga Kerja Langsung"}, {"value": "overhead", "label": "Overhead Produksi"}, {"value": "other", "label": "Biaya Produksi Lainnya"}],
             "cost_methods": [{"value": "per_batch", "label": "Per Batch"}, {"value": "per_unit", "label": "Per Unit"}, {"value": "pct_material", "label": "% dari Biaya Bahan"}]}

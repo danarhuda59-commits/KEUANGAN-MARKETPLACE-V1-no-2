@@ -1,25 +1,28 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, ArrowUp, ArrowDown, Save, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Save, AlertTriangle, Target } from "lucide-react";
 import { api, errMsg } from "../lib/api";
 import { computeHpp } from "../lib/hpp";
+import { useAuth } from "../lib/auth";
 import { formatRp, formatNum, formatPct } from "../lib/format";
 import { Field, TextInput, NumberInput, SelectInput, TextArea, SummaryRow } from "./common";
 import { Button } from "./ui/button";
 
-export const emptyRecipe = { product_id: "", name: "", version: "v1", yield_qty: 1, yield_unit: "pcs", selling_price: 0, is_default: true, is_sub_recipe: false, notes: "", items: [], extra_costs: [] };
+export const emptyRecipe = { product_id: "", name: "", version: "v1", yield_qty: 1, yield_unit: "pcs", selling_price: 0, target_margin: null, is_default: true, is_sub_recipe: false, notes: "", items: [], extra_costs: [] };
 const newItem = () => ({ _k: Math.random().toString(36).slice(2), material_id: "", sub_recipe_id: null, qty: "", unit: "", waste_pct: 0 });
 
-export function useRecipeCalc(recipe, materials, conversions, recipes) {
+export function useRecipeCalc(recipe, materials, conversions, recipes, defaultMargin = null) {
   const matMap = useMemo(() => Object.fromEntries((materials || []).map((m) => [m.id, m])), [materials]);
   const convMap = useMemo(() => Object.fromEntries((conversions || []).map((c) => [`${c.from_unit}>${c.to_unit}`, parseFloat(c.factor)])), [conversions]);
   const subCosts = useMemo(() => Object.fromEntries((recipes || []).map((r) => [r.id, { hpp_per_unit: r.summary?.hpp_per_unit || 0, name: r.name, yield_unit: r.yield_unit }])), [recipes]);
-  const result = useMemo(() => computeHpp(recipe, matMap, convMap, subCosts), [recipe, matMap, convMap, subCosts]);
+  const result = useMemo(() => computeHpp(recipe, matMap, convMap, subCosts, defaultMargin), [recipe, matMap, convMap, subCosts, defaultMargin]);
   return { result, matMap };
 }
 
-export function HppSummary({ r, testId = "hpp-summary" }) {
+export function HppSummary({ r, testId = "hpp-summary", onApplyPrice }) {
   const tone = r.profit_per_unit === null ? "default" : r.profit_per_unit >= 0 ? "good" : "bad";
+  const hasSuggestion = r.suggested_price !== null && r.suggested_price !== undefined;
+  const belowTarget = hasSuggestion && r.selling_price > 0 && r.selling_price < r.suggested_price - 0.005;
   return (
     <div className="card-panel space-y-0.5" data-testid={testId}>
       <h3 className="mb-3 font-heading font-semibold">Ringkasan HPP</h3>
@@ -35,6 +38,21 @@ export function HppSummary({ r, testId = "hpp-summary" }) {
       <SummaryRow label="Laba per Unit" value={r.profit_per_unit === null ? "—" : formatRp(r.profit_per_unit, true)} tone={tone} testId="sum-profit" />
       <SummaryRow label="Margin" value={r.margin_pct === null ? "—" : formatPct(r.margin_pct)} tone={tone} testId="sum-margin" />
       <SummaryRow label="Markup" value={r.markup_pct === null ? "—" : formatPct(r.markup_pct)} tone={tone} testId="sum-markup" />
+      {r.target_margin_pct !== null && r.target_margin_pct !== undefined && (
+        <div className="mt-3 rounded-md border border-teal-200 bg-teal-50/60 p-3 dark:border-teal-800 dark:bg-teal-900/20" data-testid="target-margin-box">
+          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-teal-800 dark:text-teal-200"><Target className="h-3.5 w-3.5" />Target Margin {formatPct(r.target_margin_pct)}{r.target_margin_is_override ? " (override resep)" : " (default usaha)"}</div>
+          {hasSuggestion ? (
+            <>
+              <SummaryRow label="Harga Saran (tepat)" value={formatRp(r.suggested_price, true)} testId="sum-suggested-price" />
+              <SummaryRow label="Harga Saran (bulat ke atas Rp100)" value={formatRp(r.suggested_price_rounded)} bold tone="primary" testId="sum-suggested-price-rounded" />
+              <SummaryRow label="Laba/unit di harga saran" value={formatRp(r.suggested_profit_per_unit, true)} testId="sum-suggested-profit" />
+              <p className="mt-1 text-[11px] text-muted-foreground" data-testid="suggestion-note">Rumus: harga = HPP/unit ÷ (1 − target margin). Margin dihitung dari harga jual, bukan markup dari HPP.</p>
+              {belowTarget && <p className="mt-1 text-[11px] text-orange-700 dark:text-orange-300" data-testid="below-target-warning">Harga jual saat ini di bawah harga saran — margin belum mencapai target.</p>}
+              {onApplyPrice && <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => onApplyPrice(r.suggested_price_rounded)} data-testid="apply-suggested-price-btn">Pakai harga saran {formatRp(r.suggested_price_rounded)}</Button>}
+            </>
+          ) : <p className="text-xs text-muted-foreground" data-testid="suggestion-note">{r.suggestion_note || "HPP belum bisa dihitung, harga saran belum tersedia."}</p>}
+        </div>
+      )}
       {r.warning && <p className="mt-2 flex items-center gap-2 rounded-md bg-orange-50 p-2 text-xs text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" data-testid="hpp-warning"><AlertTriangle className="h-3.5 w-3.5" />{r.warning}</p>}
       {r.errors?.map((e, i) => <p key={i} className="rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-300" data-testid="hpp-error">{e}</p>)}
     </div>
@@ -42,11 +60,13 @@ export function HppSummary({ r, testId = "hpp-summary" }) {
 }
 
 export default function RecipeEditor({ initial, products, materials, units, conversions, recipes, meta, mode = "recipe", onSaved, onCancel }) {
-  const [r, setR] = useState(() => ({ ...emptyRecipe, ...initial, items: (initial?.items || []).map((i) => ({ ...i, _k: i.id || Math.random().toString(36).slice(2) })), extra_costs: initial?.extra_costs || [] }));
+  const { business } = useAuth();
+  const defaultMargin = business?.target_margin ?? 30;
+  const [r, setR] = useState(() => ({ ...emptyRecipe, ...initial, target_margin: initial?.target_margin ?? null, items: (initial?.items || []).map((i) => ({ ...i, _k: i.id || Math.random().toString(36).slice(2) })), extra_costs: initial?.extra_costs || [] }));
   const [useNested, setUseNested] = useState(() => (initial?.items || []).some((i) => i.sub_recipe_id));
   const [saving, setSaving] = useState(false);
   const [calcName, setCalcName] = useState("");
-  const { result, matMap } = useRecipeCalc(r, materials, conversions, recipes);
+  const { result, matMap } = useRecipeCalc(r, materials, conversions, recipes, defaultMargin);
   const set = (k, v) => setR((s) => ({ ...s, [k]: v }));
   const setItem = (idx, patch) => setR((s) => ({ ...s, items: s.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) }));
   const move = (idx, dir) => setR((s) => { const items = [...s.items]; const j = idx + dir; if (j < 0 || j >= items.length) return s; [items[idx], items[j]] = [items[j], items[idx]]; return { ...s, items }; });
@@ -55,7 +75,8 @@ export default function RecipeEditor({ initial, products, materials, units, conv
   const subOptions = (recipes || []).filter((x) => x.id !== initial?.id).map((x) => ({ value: x.id, label: `${x.name} (${formatRp(x.summary?.hpp_per_unit, true)}/${x.yield_unit || "unit"})` }));
   const unitOpts = (units || []).map((u) => ({ value: u.code, label: u.code }));
 
-  const payload = () => ({ ...r, product_id: r.product_id || null, yield_qty: parseFloat(r.yield_qty || 0), selling_price: parseFloat(r.selling_price || 0),
+  const marginOverride = r.target_margin === null || r.target_margin === undefined || r.target_margin === "" ? null : parseFloat(r.target_margin);
+  const payload = () => ({ ...r, product_id: r.product_id || null, yield_qty: parseFloat(r.yield_qty || 0), selling_price: parseFloat(r.selling_price || 0), target_margin: Number.isFinite(marginOverride) ? marginOverride : null,
     items: r.items.map(({ _k, id, ...it }) => ({ material_id: it.sub_recipe_id ? null : it.material_id || null, sub_recipe_id: it.sub_recipe_id || null, qty: parseFloat(it.qty || 0), unit: it.unit || null, waste_pct: parseFloat(it.waste_pct || 0) })),
     extra_costs: r.extra_costs.map((c) => ({ ...c, value: parseFloat(c.value || 0) })) });
 
@@ -64,6 +85,7 @@ export default function RecipeEditor({ initial, products, materials, units, conv
     if (r.items.length === 0) return "Tambahkan minimal satu bahan";
     if (result.errors.length) return result.errors[0];
     if (r.items.some((it) => !(parseFloat(it.qty) > 0))) return "Qty setiap bahan harus lebih dari 0";
+    if (marginOverride !== null && !(marginOverride >= 0 && marginOverride < 100)) return "Target margin harus antara 0 dan 99,99%";
     return null;
   };
   const save = async () => {
@@ -82,7 +104,7 @@ export default function RecipeEditor({ initial, products, materials, units, conv
     setSaving(true);
     try {
       const b = payload();
-      await api.post("/hpp/calculations", { name: calcName || r.name || "Perhitungan HPP", product_id: b.product_id, recipe_id: initial?.id || null, items: b.items, extra_costs: b.extra_costs, yield_qty: b.yield_qty, selling_price: b.selling_price });
+      await api.post("/hpp/calculations", { name: calcName || r.name || "Perhitungan HPP", product_id: b.product_id, recipe_id: initial?.id || null, items: b.items, extra_costs: b.extra_costs, yield_qty: b.yield_qty, selling_price: b.selling_price, target_margin: b.target_margin });
       toast.success("Perhitungan HPP tersimpan");
       onSaved?.();
     } catch (e) { toast.error(errMsg(e)); } finally { setSaving(false); }
@@ -97,6 +119,7 @@ export default function RecipeEditor({ initial, products, materials, units, conv
           <Field label={mode === "calculator" ? "Jumlah Produksi / Yield" : "Hasil Produksi (Yield)"} required><NumberInput value={r.yield_qty} onChange={(v) => set("yield_qty", v)} data-testid="recipe-yield-input" /></Field>
           <Field label="Satuan Yield"><SelectInput value={r.yield_unit} onChange={(v) => set("yield_unit", v)} options={unitOpts} data-testid="recipe-yield-unit-select" /></Field>
           <Field label="Harga Jual / unit"><NumberInput value={r.selling_price} onChange={(v) => set("selling_price", v)} data-testid="recipe-selling-price-input" /></Field>
+          <Field label="Target Margin % (opsional)" hint={`Kosong = pakai default usaha ${formatPct(defaultMargin)}`}><NumberInput value={r.target_margin ?? ""} onChange={(v) => set("target_margin", v === "" || v === null ? null : v)} placeholder={String(defaultMargin)} data-testid="recipe-target-margin-input" /></Field>
           <Field label="Versi"><TextInput value={r.version || ""} onChange={(e) => set("version", e.target.value)} data-testid="recipe-version-input" /></Field>
           <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-4 text-sm">
             <label className="flex items-center gap-2"><input type="checkbox" checked={r.is_default} onChange={(e) => set("is_default", e.target.checked)} className="h-4 w-4 accent-teal-700" data-testid="recipe-default-checkbox" />Resep utama untuk produk ini</label>
@@ -174,7 +197,7 @@ export default function RecipeEditor({ initial, products, materials, units, conv
       </div>
 
       <div className="space-y-4 xl:sticky xl:top-20 self-start">
-        <HppSummary r={result} />
+        <HppSummary r={result} onApplyPrice={(p) => { set("selling_price", p); toast.success(`Harga jual diisi ${formatRp(p)}`); }} />
         <div className="card-panel space-y-2">
           {mode === "calculator" && <Field label="Nama perhitungan"><TextInput value={calcName} onChange={(e) => setCalcName(e.target.value)} placeholder={r.name || "Perhitungan HPP"} data-testid="calc-name-input" /></Field>}
           {mode === "calculator" && <Button className="w-full" onClick={saveCalc} disabled={saving} data-testid="save-calculation-btn"><Save className="mr-1 h-4 w-4" />Simpan Perhitungan</Button>}

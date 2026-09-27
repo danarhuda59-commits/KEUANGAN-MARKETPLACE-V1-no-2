@@ -1,4 +1,4 @@
-import os, io, uuid, json, requests, logging
+import io, uuid, json, logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Request
 from typing import Optional, List, Any
@@ -8,24 +8,11 @@ from core import db, Q, new_id, now_iso, today_str, TZ, strip, num, current_user
 from routers.master import MaterialIn, ProductIn, create_material, create_product
 from routers.recipes import RecipeIn, create_recipe
 from routers.operations import PurchaseIn, SaleIn, ExpenseIn, ProductionIn, create_purchase, create_sale, create_expense, create_production
+import storage
 
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
-
-STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
-STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 APP_NAME = "hpp-finance"
-storage_key = None
-
-
-def init_storage(force=False):
-    global storage_key
-    if storage_key and not force:
-        return storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": os.environ.get("EMERGENT_LLM_KEY")}, timeout=30)
-    resp.raise_for_status()
-    storage_key = resp.json()["storage_key"]
-    return storage_key
 
 
 BUSINESS_COLLECTIONS = ["categories", "units", "unit_conversions", "suppliers", "raw_materials", "material_price_history", "products", "recipes", "recipe_items",
@@ -104,14 +91,12 @@ async def upload(file: UploadFile = File(...), user=Depends(current_user)):
     ext = (file.filename or "bin").rsplit(".", 1)[-1].lower()
     path = f"{APP_NAME}/uploads/{user['business_id']}/{uuid.uuid4()}.{ext}"
     ct = file.content_type or "application/octet-stream"
+    if not ct.startswith("image/"):
+        raise HTTPException(400, "Hanya file gambar yang diperbolehkan")
     try:
-        key = init_storage()
-        resp = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key, "Content-Type": ct}, data=data, timeout=120)
-        if resp.status_code == 404:
-            key = init_storage(force=True)
-            resp = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key, "Content-Type": ct}, data=data, timeout=120)
-        resp.raise_for_status()
-        spath = resp.json()["path"]
+        spath = storage.put_object(path, data, ct)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"upload failed: {e}")
         raise HTTPException(502, "Upload ke storage gagal, coba lagi")
@@ -125,12 +110,14 @@ async def get_file(fid: str, user=Depends(current_user)):
     rec = await db.files.find_one({"id": fid, "business_id": user["business_id"], "is_deleted": False})
     if not rec:
         raise HTTPException(404, "File tidak ditemukan")
-    key = init_storage()
-    resp = requests.get(f"{STORAGE_URL}/objects/{rec['storage_path']}", headers={"X-Storage-Key": key}, timeout=60)
-    if resp.status_code == 404:
-        resp = requests.get(f"{STORAGE_URL}/objects/{rec['storage_path']}", headers={"X-Storage-Key": init_storage(True)}, timeout=60)
-    resp.raise_for_status()
-    return Response(content=resp.content, media_type=rec.get("content_type"), headers={"Cache-Control": "private, max-age=3600"})
+    try:
+        content, ct = storage.get_object(rec["storage_path"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"download failed: {e}")
+        raise HTTPException(502, "Gagal mengambil file dari storage")
+    return Response(content=content, media_type=rec.get("content_type") or ct, headers={"Cache-Control": "private, max-age=3600"})
 
 
 # ---------- Backup / restore ----------

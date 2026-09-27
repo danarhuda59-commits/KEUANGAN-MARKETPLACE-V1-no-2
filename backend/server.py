@@ -7,6 +7,7 @@ from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
 from core import db, client, hash_password, verify_password
 from routers import auth, master, recipes, operations, finance, settings_router
+import storage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=[o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -49,10 +50,7 @@ async def startup():
             logger.info("Admin user seeded")
         elif not verify_password(pw, existing["password_hash"]):
             await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(pw)}})
-    try:
-        settings_router.init_storage()
-    except Exception as e:
-        logger.error(f"Storage init failed: {e}")
+    logger.info("File storage: %s", "S3 configured" if storage.storage_enabled() else "DISABLED (S3_* env not set)")
 
 
 @app.on_event("shutdown")

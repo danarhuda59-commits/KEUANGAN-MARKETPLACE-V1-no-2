@@ -14,7 +14,17 @@ export function convertToUsage(qty, unit, m, conv) {
   return { qty: 0, ok: false, error: `Konversi ${unit} → ${m.usage_unit} tidak ditemukan` };
 }
 
-export function computeHpp({ items = [], extra_costs = [], yield_qty = 0, selling_price = 0 }, materials, conv, subCosts = {}) {
+export function suggestPrice(hpp, targetMargin) {
+  if (targetMargin === null || targetMargin === undefined || targetMargin === "") return { target_margin_pct: null, suggested_price: null, suggested_price_rounded: null, suggested_profit_per_unit: null, suggestion_note: null };
+  const tm = n(targetMargin);
+  const out = { target_margin_pct: tm, suggested_price: null, suggested_price_rounded: null, suggested_profit_per_unit: null, suggestion_note: null };
+  if (hpp === null || hpp === undefined) return out;
+  if (tm < 0 || tm >= 100) return { ...out, suggestion_note: "Target margin harus antara 0 dan 99,99%" };
+  const price = hpp / (1 - tm / 100);
+  return { ...out, suggested_price: price, suggested_price_rounded: price > 0 ? Math.ceil(price / 100) * 100 : 0, suggested_profit_per_unit: price - hpp, suggestion_note: `Harga saran = HPP ÷ (1 − ${tm}%)` };
+}
+
+export function computeHpp({ items = [], extra_costs = [], yield_qty = 0, selling_price = 0, target_margin = null }, materials, conv, subCosts = {}, defaultMargin = null) {
   const rows = [];
   let materialTotal = 0;
   items.forEach((it, idx) => {
@@ -51,7 +61,9 @@ export function computeHpp({ items = [], extra_costs = [], yield_qty = 0, sellin
   const sp = Math.max(n(selling_price), 0);
   const hpp = y > 0 ? totalBatch / y : null;
   const profit = hpp !== null && sp > 0 ? sp - hpp : null;
+  const tm = target_margin !== null && target_margin !== undefined && target_margin !== "" ? target_margin : defaultMargin;
   return {
+    ...suggestPrice(hpp, tm), target_margin_is_override: target_margin !== null && target_margin !== undefined && target_margin !== "",
     items: rows, item_count: rows.length, material_total: materialTotal, packaging_total: sums.packaging, labor_total: sums.labor, overhead_total: sums.overhead, other_total: sums.other,
     total_batch: totalBatch, yield_qty: y, hpp_per_unit: hpp, selling_price: sp, profit_per_unit: profit,
     margin_pct: profit !== null && sp > 0 ? (profit / sp) * 100 : null, markup_pct: profit !== null && hpp > 0 ? (profit / hpp) * 100 : null,

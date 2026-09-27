@@ -167,6 +167,8 @@ export function Materials() {
 
 function PhotoField({ form, setForm, testId }) {
   const [up, setUp] = useState(false);
+  const meta = useApi("/meta");
+  const disabled = meta.data && !meta.data.storage_enabled;
   const upload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -181,7 +183,9 @@ function PhotoField({ form, setForm, testId }) {
   return (
     <div className="flex items-center gap-3">
       {form.photo_url ? <img src={fileUrl(form.photo_url)} alt="" className="h-16 w-16 rounded-lg object-cover border" /> : <div className="h-16 w-16 rounded-lg border bg-muted" />}
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"><Upload className="h-4 w-4" />{up ? "Mengunggah..." : "Upload Foto"}<input type="file" accept="image/*" className="hidden" onChange={upload} data-testid={`${testId}-photo-input`} /></label>
+      {disabled
+        ? <span className="text-xs text-muted-foreground" data-testid={`${testId}-photo-disabled`}>Upload foto nonaktif — penyimpanan file (S3/R2) belum dikonfigurasi di server.</span>
+        : <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"><Upload className="h-4 w-4" />{up ? "Mengunggah..." : "Upload Foto"}<input type="file" accept="image/*" className="hidden" onChange={upload} data-testid={`${testId}-photo-input`} /></label>}
     </div>
   );
 }

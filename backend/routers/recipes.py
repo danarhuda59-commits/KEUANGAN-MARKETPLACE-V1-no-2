@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List, Any
 from pydantic import BaseModel
-from core import db, Q, new_id, now_iso, strip, num, current_user, audit, compute_hpp, load_materials, load_conversions, recipe_cost, get_recipe_items
+from core import db, Q, new_id, now_iso, strip, num, current_user, audit, compute_hpp, load_materials, load_conversions, recipe_cost, get_recipe_items, business_target_margin
 
 router = APIRouter(tags=["recipes"])
 
@@ -29,6 +29,7 @@ class RecipeIn(BaseModel):
     yield_qty: float = 1
     yield_unit: Optional[str] = "pcs"
     selling_price: float = 0
+    target_margin: Optional[float] = None
     is_default: bool = False
     is_sub_recipe: bool = False
     notes: Optional[str] = ""
@@ -41,6 +42,7 @@ class HppCalcIn(BaseModel):
     extra_costs: List[ExtraCostIn] = []
     yield_qty: float = 1
     selling_price: float = 0
+    target_margin: Optional[float] = None
 
 
 def validate_recipe(data):
@@ -48,6 +50,8 @@ def validate_recipe(data):
         raise HTTPException(400, "Nama resep wajib diisi")
     num(data["yield_qty"], "Hasil produksi (yield)")
     num(data["selling_price"], "Harga jual")
+    if data.get("target_margin") is not None and not (0 <= float(data["target_margin"]) < 100):
+        raise HTTPException(400, "Target margin harus antara 0 dan 99,99%")
     for i, it in enumerate(data["items"]):
         if not it.get("material_id") and not it.get("sub_recipe_id"):
             raise HTTPException(400, f"Bahan pada baris {i + 1} belum dipilih")
@@ -78,11 +82,13 @@ async def list_recipes(user=Depends(current_user), product_id: str = "", q: str 
         query["name"] = {"$regex": q, "$options": "i"}
     rows = await db.recipes.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
     products = {p["id"]: p for p in await db.products.find(Q(bid), {"_id": 0, "id": 1, "name": 1, "sku": 1}).to_list(5000)}
+    default_margin = await business_target_margin(bid)
     out = []
     for r in rows:
         try:
-            cost = await recipe_cost(bid, r)
-            summary = {"item_count": cost["item_count"], "material_total": cost["material_total"], "total_batch": cost["total_batch"], "hpp_per_unit": cost["hpp_per_unit"], "margin_pct": cost["margin_pct"], "profit_per_unit": cost["profit_per_unit"]}
+            cost = await recipe_cost(bid, r, default_margin=default_margin)
+            summary = {"item_count": cost["item_count"], "material_total": cost["material_total"], "total_batch": cost["total_batch"], "hpp_per_unit": cost["hpp_per_unit"], "margin_pct": cost["margin_pct"], "profit_per_unit": cost["profit_per_unit"],
+                       "target_margin_pct": cost.get("target_margin_pct"), "suggested_price": cost.get("suggested_price"), "suggested_price_rounded": cost.get("suggested_price_rounded")}
         except HTTPException as e:
             summary = {"error": e.detail}
         out.append({**r, "product": products.get(r.get("product_id")), "summary": summary})
@@ -162,7 +168,10 @@ async def calculate_hpp(body: HppCalcIn, user=Depends(current_user)):
                 raise HTTPException(400, "Sub-resep tidak ditemukan")
             c = await recipe_cost(bid, sub)
             sub_costs[sid] = {"hpp_per_unit": c["hpp_per_unit"] or 0, "name": f"[Sub] {sub['name']}", "yield_unit": sub.get("yield_unit")}
-    return compute_hpp(data["items"], data["extra_costs"], data["yield_qty"], data["selling_price"], await load_materials(bid), await load_conversions(bid), sub_costs)
+    tm = data["target_margin"] if data.get("target_margin") is not None else await business_target_margin(bid)
+    if not (0 <= float(tm) < 100):
+        raise HTTPException(400, "Target margin harus antara 0 dan 99,99%")
+    return compute_hpp(data["items"], data["extra_costs"], data["yield_qty"], data["selling_price"], await load_materials(bid), await load_conversions(bid), sub_costs, target_margin=tm)
 
 
 @router.get("/hpp/calculations")
@@ -180,6 +189,8 @@ class SaveCalcIn(HppCalcIn):
 async def save_calculation(body: SaveCalcIn, user=Depends(current_user)):
     bid = user["business_id"]
     result = await calculate_hpp(HppCalcIn(**body.model_dump(exclude={"name", "product_id", "recipe_id"})), user)
+    if result.get("target_margin_pct") is not None and not (0 <= float(result["target_margin_pct"]) < 100):
+        raise HTTPException(400, "Target margin harus antara 0 dan 99,99%")
     doc = {"id": new_id(), "business_id": bid, "name": body.name or "Perhitungan HPP", "product_id": body.product_id, "recipe_id": body.recipe_id,
            "input": body.model_dump(), "result": result, "created_at": now_iso()}
     await db.hpp_calculations.insert_one(dict(doc))

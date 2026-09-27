@@ -171,7 +171,7 @@ def calc_extras(extra_costs, material_total, yield_qty, batch_multiplier=1.0):
     return sums, detail
 
 
-def compute_hpp(items, extra_costs, yield_qty, selling_price, materials, conversions, sub_costs=None, price_mode="last"):
+def compute_hpp(items, extra_costs, yield_qty, selling_price, materials, conversions, sub_costs=None, price_mode="last", target_margin=None):
     sub_costs = sub_costs or {}
     rows, material_total = [], 0.0
     for idx, it in enumerate(items or []):
@@ -215,8 +215,27 @@ def compute_hpp(items, extra_costs, yield_qty, selling_price, materials, convers
         "labor_total": r(ex["labor"]), "overhead_total": r(ex["overhead"]), "other_total": r(ex["other"]),
         "extra_costs": ex_detail, "total_batch": r(total_batch), "yield_qty": yield_qty, "hpp_per_unit": r(hpp_unit),
         "selling_price": selling_price, "profit_per_unit": r(profit), "margin_pct": r(margin), "markup_pct": r(markup),
+        **suggest_price(hpp_unit, target_margin),
         "warning": None if yield_qty > 0 else "Hasil produksi (yield) = 0, HPP per unit tidak dapat dihitung",
     }
+
+
+def suggest_price(hpp_unit, target_margin):
+    """Harga saran = HPP / (1 - target margin%). Margin dihitung dari harga jual, bukan markup dari HPP."""
+    if target_margin is None:
+        return {}
+    tm = float(target_margin)
+    out = {"target_margin_pct": tm, "suggested_price": None, "suggested_price_rounded": None, "suggested_profit_per_unit": None, "suggestion_note": None}
+    if hpp_unit is None:
+        return out
+    if tm < 0 or tm >= 100:
+        out["suggestion_note"] = "Target margin harus antara 0 dan 99,99% (margin 100% tidak mungkin dicapai)"
+        return out
+    price = hpp_unit / (1 - tm / 100.0)
+    rounded = math.ceil(price / 100.0) * 100 if price > 0 else 0
+    out.update({"suggested_price": round(price, 4), "suggested_price_rounded": rounded, "suggested_profit_per_unit": round(price - hpp_unit, 4),
+                "suggestion_note": f"Rp{price:,.2f} = HPP Rp{hpp_unit:,.2f} ÷ (1 − {tm:g}%)"})
+    return out
 
 
 async def load_materials(bid, ids=None):
@@ -231,9 +250,17 @@ async def get_recipe_items(recipe_id):
     return await db.recipe_items.find({"recipe_id": recipe_id}, {"_id": 0}).sort("sort_order", 1).to_list(1000)
 
 
-async def recipe_cost(bid, recipe, depth=0, price_mode="last"):
+async def business_target_margin(bid):
+    biz = await db.businesses.find_one({"id": bid}, {"_id": 0, "target_margin": 1})
+    return float((biz or {}).get("target_margin") or 0)
+
+
+async def recipe_cost(bid, recipe, depth=0, price_mode="last", default_margin=None):
     if depth > 6:
         raise HTTPException(400, "Nested resep terlalu dalam / melingkar (maks 6 level)")
+    if default_margin is None:
+        default_margin = await business_target_margin(bid)
+    target_margin = recipe.get("target_margin") if recipe.get("target_margin") is not None else default_margin
     items = recipe.get("items") if recipe.get("items") is not None else await get_recipe_items(recipe["id"])
     materials = await load_materials(bid)
     conversions = await load_conversions(bid)
@@ -246,10 +273,10 @@ async def recipe_cost(bid, recipe, depth=0, price_mode="last"):
             sub = await db.recipes.find_one(Q(bid, id=sid), {"_id": 0})
             if not sub:
                 raise HTTPException(400, "Sub-resep tidak ditemukan")
-            c = await recipe_cost(bid, sub, depth + 1, price_mode)
+            c = await recipe_cost(bid, sub, depth + 1, price_mode, default_margin)
             sub_costs[sid] = {"hpp_per_unit": c["hpp_per_unit"] or 0, "name": f"[Sub] {sub['name']}", "yield_unit": sub.get("yield_unit")}
     return compute_hpp(items, recipe.get("extra_costs") or [], recipe.get("yield_qty"), recipe.get("selling_price") or 0,
-                       materials, conversions, sub_costs, price_mode)
+                       materials, conversions, sub_costs, price_mode, target_margin)
 
 
 async def expand_items(bid, items, factor, depth=0):
@@ -273,11 +300,15 @@ async def expand_items(bid, items, factor, depth=0):
             for c in sub.get("extra_costs") or []:
                 v = float(c.get("value") or 0)
                 method = c.get("method") or "per_batch"
-                amt = v * f if method == "per_batch" else v * sy * f if method == "per_unit" else None
-                if amt is None:
-                    extras.append({**c, "name": f"{c.get('name')} ({sub['name']})", "method": "pct_material", "value": v})
+                if method == "per_batch":
+                    amt = v * f
+                elif method == "per_unit":
+                    amt = v * sy * f
                 else:
-                    extras.append({**c, "name": f"{c.get('name')} ({sub['name']})", "method": "per_batch", "value": amt})
+                    # pct_material dihitung dari biaya bahan sub-resep itu sendiri (bukan bahan resep induk)
+                    sub_material_total = float((await recipe_cost(bid, sub, depth + 1))["material_total"] or 0)
+                    amt = sub_material_total * f * v / 100.0
+                extras.append({**c, "name": f"{c.get('name')} ({sub['name']})", "method": "per_batch", "value": amt})
         else:
             flat.append({**it, "qty": float(it.get("qty") or 0) * factor})
     return flat, extras
