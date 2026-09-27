@@ -32,7 +32,7 @@ function Sidebar({ onNavigate }) {
           <div key={i}>
             {g.group && <p className="mt-4 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{g.group}</p>}
             {g.items.map((it) => (
-              <NavLink key={it.to} to={it.to} end={it.to === "/"} onClick={onNavigate} data-testid={`nav-${it.to.replace(/\//g, "-").replace(/^-/, "") || "dashboard"}`}
+              <NavLink key={it.to} to={it.to} end={it.to === "/" || it.to === "/marketplace"} onClick={onNavigate} data-testid={`nav-${it.to.replace(/\//g, "-").replace(/^-/, "") || "dashboard"}`}
                 className={({ isActive }) => cn("mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors", isActive ? "bg-teal-600/20 text-teal-300 font-medium" : "hover:bg-slate-800 hover:text-white")}>
                 <it.icon className="h-4 w-4 shrink-0" />{it.label}
               </NavLink>
