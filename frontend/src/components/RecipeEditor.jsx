@@ -49,12 +49,35 @@ export function HppSummary({ r, testId = "hpp-summary", onApplyPrice }) {
               <p className="mt-1 text-[11px] text-muted-foreground" data-testid="suggestion-note">Rumus: harga = HPP/unit ÷ (1 − target margin). Margin dihitung dari harga jual, bukan markup dari HPP.</p>
               {belowTarget && <p className="mt-1 text-[11px] text-orange-700 dark:text-orange-300" data-testid="below-target-warning">Harga jual saat ini di bawah harga saran — margin belum mencapai target.</p>}
               {onApplyPrice && <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => onApplyPrice(r.suggested_price_rounded)} data-testid="apply-suggested-price-btn">Pakai harga saran {formatRp(r.suggested_price_rounded)}</Button>}
+              <PriceSimulation rows={r.price_simulation} sellingPrice={r.selling_price} onApplyPrice={onApplyPrice} />
             </>
           ) : <p className="text-xs text-muted-foreground" data-testid="suggestion-note">{r.suggestion_note || "HPP belum bisa dihitung, harga saran belum tersedia."}</p>}
         </div>
       )}
       {r.warning && <p className="mt-2 flex items-center gap-2 rounded-md bg-orange-50 p-2 text-xs text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" data-testid="hpp-warning"><AlertTriangle className="h-3.5 w-3.5" />{r.warning}</p>}
       {r.errors?.map((e, i) => <p key={i} className="rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-300" data-testid="hpp-error">{e}</p>)}
+    </div>
+  );
+}
+
+export function PriceSimulation({ rows, sellingPrice, onApplyPrice }) {
+  if (!rows?.length) return null;
+  return (
+    <div className="mt-3 border-t border-teal-200 pt-2 dark:border-teal-800" data-testid="price-simulation">
+      <p className="mb-1 text-xs font-semibold text-teal-800 dark:text-teal-200">Simulasi Harga per Margin</p>
+      <table className="w-full text-xs">
+        <thead><tr className="text-muted-foreground"><th className="py-1 text-left font-medium">Margin</th><th className="py-1 text-right font-medium">Harga (bulat)</th><th className="py-1 text-right font-medium">Laba/unit</th>{onApplyPrice && <th />}</tr></thead>
+        <tbody>
+          {rows.map((s) => (
+            <tr key={s.margin_pct} className={s.is_target ? "font-semibold text-teal-800 dark:text-teal-200" : ""} data-testid={`sim-row-${s.margin_pct}`}>
+              <td className="py-1">{formatPct(s.margin_pct)}{s.is_target && <span className="ml-1 text-[10px] font-normal text-muted-foreground">target</span>}</td>
+              <td className="num py-1 text-right" title={`Tepat ${formatRp(s.price, true)}`}>{formatRp(s.price_rounded)}{sellingPrice > 0 && Math.abs(sellingPrice - s.price_rounded) < 0.5 && <span className="ml-1 text-[10px] text-muted-foreground">saat ini</span>}</td>
+              <td className="num py-1 text-right">{formatRp(s.profit_per_unit, true)}</td>
+              {onApplyPrice && <td className="py-1 text-right"><button type="button" className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-300" onClick={() => onApplyPrice(s.price_rounded)} data-testid={`sim-apply-${s.margin_pct}`}>pakai</button></td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -112,7 +135,7 @@ export default function RecipeEditor({ initial, products, materials, units, conv
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_340px]" data-testid="recipe-editor">
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <div className="card-panel grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Produk" className="sm:col-span-2"><SelectInput value={r.product_id} onChange={(v) => { const p = (products || []).find((x) => x.id === v); setR((s) => ({ ...s, product_id: v, selling_price: p && !parseFloat(s.selling_price) ? p.selling_price : s.selling_price, yield_unit: p?.unit || s.yield_unit })); }} options={(products || []).map((p) => ({ value: p.id, label: `${p.name} (${p.sku})` }))} placeholder="— Tanpa produk (sub-resep) —" data-testid="recipe-product-select" /></Field>
           <Field label="Nama Resep" required className="sm:col-span-2"><TextInput value={r.name} onChange={(e) => set("name", e.target.value)} placeholder="cth: Baso Aci Original v1" data-testid="recipe-name-input" /></Field>
@@ -196,7 +219,7 @@ export default function RecipeEditor({ initial, products, materials, units, conv
         <Field label="Catatan"><TextArea value={r.notes || ""} onChange={(e) => set("notes", e.target.value)} data-testid="recipe-notes-input" /></Field>
       </div>
 
-      <div className="space-y-4 xl:sticky xl:top-20 self-start">
+      <div className="min-w-0 space-y-4 xl:sticky xl:top-20 self-start">
         <HppSummary r={result} onApplyPrice={(p) => { set("selling_price", p); toast.success(`Harga jual diisi ${formatRp(p)}`); }} />
         <div className="card-panel space-y-2">
           {mode === "calculator" && <Field label="Nama perhitungan"><TextInput value={calcName} onChange={(e) => setCalcName(e.target.value)} placeholder={r.name || "Perhitungan HPP"} data-testid="calc-name-input" /></Field>}

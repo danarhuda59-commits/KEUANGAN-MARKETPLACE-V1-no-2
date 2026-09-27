@@ -233,8 +233,12 @@ def suggest_price(hpp_unit, target_margin):
         return out
     price = hpp_unit / (1 - tm / 100.0)
     rounded = math.ceil(price / 100.0) * 100 if price > 0 else 0
+    sim = []
+    for m in sorted({20.0, 30.0, 40.0, 50.0, tm}):
+        p = hpp_unit / (1 - m / 100.0)
+        sim.append({"margin_pct": m, "price": round(p, 4), "price_rounded": math.ceil(p / 100.0) * 100 if p > 0 else 0, "profit_per_unit": round(p - hpp_unit, 4), "is_target": m == tm})
     out.update({"suggested_price": round(price, 4), "suggested_price_rounded": rounded, "suggested_profit_per_unit": round(price - hpp_unit, 4),
-                "suggestion_note": f"Rp{price:,.2f} = HPP Rp{hpp_unit:,.2f} ÷ (1 − {tm:g}%)"})
+                "suggestion_note": f"Rp{price:,.2f} = HPP Rp{hpp_unit:,.2f} ÷ (1 − {tm:g}%)", "price_simulation": sim})
     return out
 
 

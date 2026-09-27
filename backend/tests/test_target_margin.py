@@ -32,6 +32,16 @@ def test_suggest_price_invalid_margin():
     assert suggest_price(1000, None) == {}
 
 
+def test_price_simulation_rows():
+    s = suggest_price(7000, 35)
+    margins = [x["margin_pct"] for x in s["price_simulation"]]
+    assert margins == [20, 30, 35, 40, 50]
+    row50 = next(x for x in s["price_simulation"] if x["margin_pct"] == 50)
+    assert row50["price"] == 14000 and row50["profit_per_unit"] == 7000 and not row50["is_target"]
+    assert next(x for x in s["price_simulation"] if x["is_target"])["margin_pct"] == 35
+    assert [x["margin_pct"] for x in suggest_price(1000, 30)["price_simulation"]] == [20, 30, 40, 50]
+
+
 def test_compute_hpp_with_and_without_target_margin():
     items = [{"material_id": "m1", "qty": 1, "unit": "pcs", "waste_pct": 0}]
     r = compute_hpp(items, [], 10, 0, {"m1": mat(50000)}, {})

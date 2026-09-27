@@ -17,6 +17,7 @@ Pemilik/operator UMKM F&B: hitung HPP dari bahan & resep, catat pembelian/produk
 - MongoDB (lokal dev → Atlas prod)
 
 ## Yang sudah dikerjakan (Juni 2026)
+- [x] Iterasi 3 — Simulasi Harga: tabel margin 20/30/40/50% (+ target bila berbeda) di ringkasan HPP (editor resep & Perhitungan HPP), tiap baris bisa "pakai" → isi harga jual; `price_simulation` di API `compute_hpp`; fix overflow mobile editor resep (`min-w-0`)
 - [x] Iterasi 2 — P0 deploy: CORS_ORIGINS wajib/eksplisit; upload foto → S3-compatible boto3 (`backend/storage.py`, 503 + UI notice bila S3_* kosong); telemetri Emergent dihapus dari index.html
 - [x] Iterasi 2 — Fix H6: `pct_material` sub-resep dihitung dari bahan sub-resep (HPP produksi == HPP resep, diverifikasi 2550 == 2550, overhead 500)
 - [x] Iterasi 2 — Target Margin Otomatis: default usaha + override per resep, `suggest_price()` di core.py, `suggestPrice()` di lib/hpp.js, UI di RecipeEditor/Recipes/HppCalculator; test: test_target_margin.py (4) + test_iteration4.py (11) lulus

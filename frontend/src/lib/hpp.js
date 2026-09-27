@@ -21,7 +21,8 @@ export function suggestPrice(hpp, targetMargin) {
   if (hpp === null || hpp === undefined) return out;
   if (tm < 0 || tm >= 100) return { ...out, suggestion_note: "Target margin harus antara 0 dan 99,99%" };
   const price = hpp / (1 - tm / 100);
-  return { ...out, suggested_price: price, suggested_price_rounded: price > 0 ? Math.ceil(price / 100) * 100 : 0, suggested_profit_per_unit: price - hpp, suggestion_note: `Harga saran = HPP ÷ (1 − ${tm}%)` };
+  const sim = [...new Set([20, 30, 40, 50, tm])].sort((a, b) => a - b).map((m) => { const p = hpp / (1 - m / 100); return { margin_pct: m, price: p, price_rounded: p > 0 ? Math.ceil(p / 100) * 100 : 0, profit_per_unit: p - hpp, is_target: m === tm }; });
+  return { ...out, suggested_price: price, suggested_price_rounded: price > 0 ? Math.ceil(price / 100) * 100 : 0, suggested_profit_per_unit: price - hpp, suggestion_note: `Harga saran = HPP ÷ (1 − ${tm}%)`, price_simulation: sim };
 }
 
 export function computeHpp({ items = [], extra_costs = [], yield_qty = 0, selling_price = 0, target_margin = null }, materials, conv, subCosts = {}, defaultMargin = null) {
