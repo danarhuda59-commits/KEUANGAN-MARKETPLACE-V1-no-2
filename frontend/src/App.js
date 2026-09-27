@@ -14,6 +14,13 @@ import { Purchases, Sales, Expenses } from "./pages/Transactions";
 import { Cash, ProfitLoss, CashFlow, Bep } from "./pages/Finance";
 import Reports from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
+import MarketplaceDashboard from "./pages/marketplace/MarketplaceDashboard";
+import Orders from "./pages/marketplace/Orders";
+import Packaging from "./pages/marketplace/Packaging";
+import ChannelFees from "./pages/marketplace/ChannelFees";
+import MarketplaceImport from "./pages/marketplace/Import";
+import SettlementsPage from "./pages/marketplace/Settlements";
+import MarketplaceReports from "./pages/marketplace/MarketplaceReports";
 
 if (localStorage.getItem("theme") === "dark") document.documentElement.classList.add("dark");
 
@@ -50,6 +57,13 @@ function App() {
             <Route path="/bep" element={<Bep />} />
             <Route path="/laporan/:type" element={<Reports />} />
             <Route path="/pengaturan" element={<SettingsPage />} />
+            <Route path="/marketplace" element={<MarketplaceDashboard />} />
+            <Route path="/marketplace/order" element={<Orders />} />
+            <Route path="/marketplace/packaging" element={<Packaging />} />
+            <Route path="/marketplace/biaya" element={<ChannelFees />} />
+            <Route path="/marketplace/import" element={<MarketplaceImport />} />
+            <Route path="/marketplace/settlement" element={<SettlementsPage />} />
+            <Route path="/marketplace/laporan/:type" element={<MarketplaceReports />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

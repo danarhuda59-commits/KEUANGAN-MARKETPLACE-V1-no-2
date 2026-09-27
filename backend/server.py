@@ -7,7 +7,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from core import db, client, hash_password, verify_password
-from routers import auth, master, recipes, operations, finance, settings_router
+from routers import auth, master, recipes, operations, finance, settings_router, marketplace
 import storage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -32,7 +32,7 @@ async def health():
         return JSONResponse({"status": "degraded", "database": "unreachable"}, status_code=503)
 
 
-for r in (auth.router, master.router, recipes.router, operations.router, finance.router, settings_router.router):
+for r in (auth.router, master.router, recipes.router, operations.router, finance.router, settings_router.router, marketplace.router):
     api.include_router(r)
 app.include_router(api)
 
@@ -52,6 +52,9 @@ async def startup():
     for c in ("raw_materials", "products", "recipes", "purchases", "sales", "expenses", "production_orders", "cash_transactions", "inventory_transactions"):
         await db[c].create_index([("business_id", 1), ("date", -1)] if c in ("purchases", "sales", "expenses", "production_orders", "cash_transactions", "inventory_transactions") else [("business_id", 1)])
     await db.recipe_items.create_index("recipe_id")
+    await db.sales_orders.create_index([("business_id", 1), ("order_id", 1), ("sku", 1)])
+    await db.sales_orders.create_index([("business_id", 1), ("date", -1)])
+    await db.marketplace_settlements.create_index([("business_id", 1), ("order_id", 1)])
     email = os.environ.get("ADMIN_EMAIL")
     pw = os.environ.get("ADMIN_PASSWORD")
     if email and pw:

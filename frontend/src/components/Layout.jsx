@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
-import { LayoutDashboard, Package, Boxes, Truck, Tags, Ruler, BookOpen, Factory, Warehouse, ShoppingCart, Receipt, Wallet, Landmark, TrendingUp, ArrowLeftRight, Target, FileBarChart, Settings, LogOut, Menu, X, Calculator, Sun, Moon, Bell } from "lucide-react";
+import { LayoutDashboard, Package, Boxes, Truck, Tags, Ruler, BookOpen, Factory, Warehouse, ShoppingCart, Receipt, Wallet, Landmark, TrendingUp, ArrowLeftRight, Target, FileBarChart, Settings, LogOut, Menu, X, Calculator, Sun, Moon, Bell, Store, PackageOpen, Percent, Upload, Banknote, ClipboardList } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useApi } from "../lib/hooks";
 import { cn } from "../lib/utils";
@@ -10,6 +10,7 @@ const NAV = [
   { group: "Master Data", items: [{ to: "/bahan", label: "Bahan Baku", icon: Package }, { to: "/produk", label: "Produk", icon: Boxes }, { to: "/supplier", label: "Supplier", icon: Truck }, { to: "/kategori", label: "Kategori", icon: Tags }, { to: "/satuan", label: "Satuan", icon: Ruler }] },
   { group: "Produksi", items: [{ to: "/resep", label: "Resep / BOM", icon: BookOpen }, { to: "/hpp", label: "Perhitungan HPP", icon: Calculator }, { to: "/produksi", label: "Produksi", icon: Factory }, { to: "/stok", label: "Stok", icon: Warehouse }] },
   { group: "Transaksi", items: [{ to: "/pembelian", label: "Pembelian", icon: ShoppingCart }, { to: "/penjualan", label: "Penjualan", icon: Receipt }, { to: "/pengeluaran", label: "Pengeluaran", icon: Wallet }] },
+  { group: "Marketplace", items: [{ to: "/marketplace", label: "Dashboard Marketplace", icon: Store }, { to: "/marketplace/order", label: "Order Marketplace", icon: ClipboardList }, { to: "/marketplace/import", label: "Import Marketplace", icon: Upload }, { to: "/marketplace/packaging", label: "Biaya Beban Packaging", icon: PackageOpen }, { to: "/marketplace/biaya", label: "Pengaturan Biaya Channel", icon: Percent }, { to: "/marketplace/settlement", label: "Settlement & Rekonsiliasi", icon: Banknote }, { to: "/marketplace/laporan/sales", label: "Laporan Marketplace", icon: FileBarChart }] },
   { group: "Keuangan", items: [{ to: "/kas", label: "Kas", icon: Landmark }, { to: "/laba-rugi", label: "Laba Rugi", icon: TrendingUp }, { to: "/cash-flow", label: "Cash Flow", icon: ArrowLeftRight }, { to: "/bep", label: "BEP", icon: Target }] },
   { group: "Laporan", items: [{ to: "/laporan/penjualan", label: "Penjualan", icon: FileBarChart }, { to: "/laporan/pembelian", label: "Pembelian", icon: FileBarChart }, { to: "/laporan/hpp", label: "HPP", icon: FileBarChart }, { to: "/laporan/stok", label: "Stok", icon: FileBarChart }, { to: "/laporan/produksi", label: "Produksi", icon: FileBarChart }, { to: "/laporan/keuangan", label: "Keuangan", icon: FileBarChart }] },
   { group: "Pengaturan", items: [{ to: "/pengaturan", label: "Pengaturan", icon: Settings }] },
